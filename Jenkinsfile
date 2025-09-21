@@ -44,7 +44,7 @@ pipeline {
                             sh 'terraform init -input=false'
                             sh 'terraform plan -out=tfplan'
                             
-                            input 'Proceed with Terraform Apply?'
+                            // input 'Proceed with Terraform Apply?'
                             
                             sh 'terraform apply -auto-approve tfplan'
                             
