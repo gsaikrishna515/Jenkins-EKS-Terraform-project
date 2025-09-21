@@ -14,7 +14,7 @@ pipeline {
         // --- NEW PARAMETER FOR YOUR APP REPO ---
         string(
             name: 'APP_GIT_REPO_URL',
-            defaultValue: 'https://github.com/your-username/your-k8s-app-repo.git',
+            defaultValue: 'https://github.com/gsaikrishna515/python-node-microservices-project-with-K8S.git',
             description: 'The Git repository URL of the Kubernetes application to deploy.'
         )
     }
@@ -64,7 +64,7 @@ pipeline {
 
                         // Apply all manifest files from the 'manifests' directory (or adjust the path)
                         echo "Applying Kubernetes manifests from the repository..."
-                        sh "kubectl apply -f manifests/"
+                        sh "kubectl apply -f kubernetes/"
                     }
                     
                     echo "Deployment initiated. Waiting for resources to become ready..."
