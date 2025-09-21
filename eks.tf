@@ -60,11 +60,6 @@ resource "aws_eks_cluster" "eks_cluster" {
 }
 
 
-# --- EKS Cluster ---
-resource "aws_eks_cluster" "eks_cluster" {
-  # ... your existing cluster configuration ...
-}
-
 # ---------------------------------------------------------------
 # --- NEW SECTION: IAM Role for EBS CSI Driver ---
 # ---------------------------------------------------------------
