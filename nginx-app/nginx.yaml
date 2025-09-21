@@ -1,36 +1,58 @@
+# This section defines the Deployment for the Nginx pods.
+# A Deployment manages a set of identical pods, ensuring a specified number of them are running.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-name: nginx-deployment
-labels:
-app: nginx
+  # The name of the Deployment resource. This is a required field.
+  name: nginx-deployment
+  # Labels are key/value pairs that are attached to objects. They can be used to organize and select subsets of objects.
+  labels:
+    app: nginx
 spec:
-replicas: 2
-selector:
-matchLabels:
-app: nginx
-template:
-metadata:
-labels:
-app: nginx
-spec:
-containers:
-- name: nginx
-image: nginx:latest # Using the public Nginx image
-ports:
-- containerPort: 80
+  # The number of identical pods to run.
+  replicas: 2
+  # The selector tells the Deployment which pods to manage. It matches the labels on the pod template.
+  selector:
+    matchLabels:
+      app: nginx
+  # The template for the pods that will be created by this Deployment.
+  template:
+    metadata:
+      # These labels are applied to each pod created by the template. The selector above matches this.
+      labels:
+        app: nginx
+    spec:
+      # The list of containers that belong to the pod.
+      containers:
+      # The name of the container within the pod.
+      - name: nginx
+        # The Docker image to use for this container. 'latest' pulls the most recent version.
+        image: nginx:latest
+        # The list of ports to expose from the container.
+        ports:
+        # The port number on the container that will be exposed.
+        - containerPort: 80
 
+# The triple dash '---' is a separator that allows you to define multiple Kubernetes resources in a single YAML file.
 ---
-
+# This section defines the Service, which provides a stable network endpoint for the Nginx pods.
 apiVersion: v1
 kind: Service
 metadata:
-name: nginx-service
+  # The name of the Service resource. This is a required field.
+  name: nginx-service
 spec:
-type: LoadBalancer
-selector:
-app: nginx
-ports:
-- protocol: TCP
-port: 80 # Port on the Load Balancer
-targetPort: 80 # Port on the pods
+  # This type exposes the Service externally using a cloud provider's load balancer.
+  # On AWS, this will automatically provision an AWS Network Load Balancer (NLB).
+  type: LoadBalancer
+  # The selector tells the Service which pods to route traffic to. It matches the labels on the pods.
+  selector:
+    app: nginx
+  # The list of ports the Service will expose.
+  ports:
+    # The protocol for the port. Default is TCP.
+    - protocol: TCP
+      # The port on the Load Balancer that will receive traffic.
+      port: 80
+      # The port on the pods that the traffic will be forwarded to. This should match the containerPort.
+      targetPort: 80
