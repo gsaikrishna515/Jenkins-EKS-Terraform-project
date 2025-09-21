@@ -63,7 +63,7 @@ pipeline {
                         
                         else if (params.ACTION == 'destroy') {
                             echo "Running Terraform Destroy..."
-                           // sh 'terraform init -input=false'
+                            sh 'terraform init -input=false'
                             sh 'terraform plan -destroy -out=tfdestroy'
                             
                             input 'DANGER: Proceed with Terraform Destroy? This cannot be undone.'
