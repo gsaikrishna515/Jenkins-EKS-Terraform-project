@@ -1,7 +1,7 @@
 terraform {
   backend "s3" {
     # Use the name of the S3 bucket you just created
-    bucket         = "your-unique-eks-terraform-state-bucket" # <-- USE THE SAME NAME AS ABOVE
+    bucket         = "cicd-tf-eks-sai" # <-- USE THE SAME NAME AS ABOVE
     key            = "eks-cluster/terraform.tfstate"         # The path/name of the state file within the bucket
     region         = "ap-south-1"
 
