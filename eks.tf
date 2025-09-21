@@ -149,12 +149,6 @@ resource "aws_eks_addon" "ebs_csi" {
   ]
 }
 
-# --- EKS Node Group ---
-resource "aws_eks_node_group" "node_group" {
-  # ... your existing node group configuration ...
-}
-
-
 
 # --- EKS Node Group ---
 resource "aws_eks_node_group" "node_group" {
