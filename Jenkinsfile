@@ -72,11 +72,11 @@ pipeline {
         }
 
         stage('Configure Kubectl') {
-            // This stage ONLY runs when the action is 'apply'.
             when {
                 expression { params.ACTION == 'apply' }
             }
             steps {
+                // This stage correctly uses withCredentials
                 withCredentials([aws(credentialsId: 'aws-credentials-for-eks')]) {
                     echo 'Configuring kubectl to connect to the cluster...'
                     sh '''
@@ -88,31 +88,37 @@ pipeline {
             }
         }
 
+
         stage('Deploy Kubernetes Application') {
-            // This stage ONLY runs when the action is 'apply'.
             when {
                 expression { params.ACTION == 'apply' }
             }
             steps {
-                script {
-                    dir('app-repo') {
-                        echo "Cloning application repository from ${params.APP_GIT_REPO_URL}"
-                        //git url: params.APP_GIT_REPO_URL
-                        git url: params.APP_GIT_REPO_URL, 
-                        branch: 'main', 
-                        credentialsId: 'git-https-token'
+                // --- FIX FOR PROBLEM #1 ---
+                // We add the withCredentials block here to make AWS credentials
+                // available for the kubectl apply command.
+                withCredentials([aws(credentialsId: 'aws-credentials-for-eks')]) {
+                    script {
+                        dir('app-repo') {
+                            echo "Cloning application repository from ${params.APP_GIT_REPO_URL}"
+                            git url: params.APP_GIT_REPO_URL, 
+                                branch: 'main', 
+                                credentialsId: 'git-https-token'
 
-                        echo "Applying Kubernetes manifests from the repository..."
-                        // Assuming manifests are in a 'manifests' folder. Adjust if needed.
-                        sh "kubectl apply -f kubernetes/"
+                            echo "Applying Kubernetes manifests from the repository..."
+                            // I see your log uses 'kubernetes/' not 'manifests/', so I've updated the path.
+                            sh "kubectl apply -f kubernetes/"
+                        }
+                        
+                        echo "Deployment initiated. Waiting for resources to become ready..."
+                        sh 'sleep 30'
+                        echo "--- Services ---"
+                        sh 'kubectl get svc --all-namespaces'
+                        echo "--- PersistentVolumeClaims ---"
+                        sh 'kubectl get pvc --all-namespaces'
+                        echo "--- Pods ---"
+                        sh 'kubectl get pods --all-namespaces'
                     }
-                    
-                    echo "Deployment initiated. Waiting for resources to become ready..."
-                    sh 'sleep 30'
-                    echo "--- Services ---"
-                    sh 'kubectl get svc --all-namespaces'
-                    echo "--- PersistentVolumeClaims ---"
-                    sh 'kubectl get pvc --all-namespaces'
                 }
             }
         }
