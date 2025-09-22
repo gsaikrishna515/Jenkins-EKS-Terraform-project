@@ -11,7 +11,6 @@ pipeline {
             choices: ['plan', 'apply', 'destroy'],
             description: 'Select the Terraform action to perform.'
         )
-        // --- NEW PARAMETER FOR YOUR APP REPO ---
         string(
             name: 'APP_GIT_REPO_URL',
             defaultValue: 'https://github.com/gsaikrishna515/python-node-microservices-project-with-K8S.git',
@@ -25,54 +24,109 @@ pipeline {
     }
 
     stages {
-        // ... Checkout Code, Terraform Execution stages remain the same ...
+        stage('Checkout Infrastructure Code') {
+            steps {
+                echo 'Checking out the EKS Terraform project...'
+                checkout scm
+            }
+        }
 
-        stage('Terraform Execution') {
+        stage('Terraform Plan') {
+            // This stage runs for 'plan', 'apply', and 'destroy' actions.
+            when {
+                expression { params.ACTION == 'plan' || params.ACTION == 'apply' || params.ACTION == 'destroy' }
+            }
             steps {
                 withCredentials([aws(credentialsId: 'aws-credentials-for-eks')]) {
                     script {
-                        if (params.ACTION == 'apply') {
-                            // ... terraform init, plan, apply, and kubectl config steps are the same ...
-                            sh 'terraform apply -auto-approve tfplan'
-                            
-                            echo 'Configuring kubectl...'
-                            sh '''
-                                CLUSTER_NAME=$(terraform output -raw cluster_name)
-                                aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}
-                            '''
-                            sh 'kubectl get nodes'
+                        echo "Initializing Terraform..."
+                        sh 'terraform init -input=false'
+
+                        // Generate a different plan file based on the action
+                        if (params.ACTION == 'destroy') {
+                            echo "Generating destroy plan..."
+                            sh 'terraform plan -destroy -out=tfplan'
+                        } else {
+                            echo "Generating infrastructure plan..."
+                            sh 'terraform plan -out=tfplan'
                         }
-                        // ... destroy logic is the same ...
                     }
                 }
             }
         }
-        
-        // --- NEW/MODIFIED DEPLOYMENT STAGE ---
+
+        stage('Terraform Apply') {
+            // This stage ONLY runs when the action is 'apply'.
+            when {
+                expression { params.ACTION == 'apply' }
+            }
+            steps {
+                withCredentials([aws(credentialsId: 'aws-credentials-for-eks')]) {
+                    // Safety Gate: Manual approval before applying
+                    input 'Proceed with Terraform Apply?'
+                    
+                    echo "Applying Terraform plan..."
+                    sh 'terraform apply -auto-approve tfplan'
+                }
+            }
+        }
+
+        stage('Configure Kubectl') {
+            // This stage ONLY runs when the action is 'apply'.
+            when {
+                expression { params.ACTION == 'apply' }
+            }
+            steps {
+                withCredentials([aws(credentialsId: 'aws-credentials-for-eks')]) {
+                    echo 'Configuring kubectl to connect to the cluster...'
+                    sh '''
+                        CLUSTER_NAME=$(terraform output -raw cluster_name)
+                        aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}
+                    '''
+                    sh 'kubectl get nodes'
+                }
+            }
+        }
+
         stage('Deploy Kubernetes Application') {
-            // This stage only runs if the action was 'apply'
+            // This stage ONLY runs when the action is 'apply'.
             when {
                 expression { params.ACTION == 'apply' }
             }
             steps {
                 script {
-                    // Use a separate directory for the application code
                     dir('app-repo') {
                         echo "Cloning application repository from ${params.APP_GIT_REPO_URL}"
-                        // Clone the application repository
                         git url: params.APP_GIT_REPO_URL
 
-                        // Apply all manifest files from the 'manifests' directory (or adjust the path)
                         echo "Applying Kubernetes manifests from the repository..."
+                        // Assuming manifests are in a 'manifests' folder. Adjust if needed.
                         sh "kubectl apply -f kubernetes/"
                     }
                     
                     echo "Deployment initiated. Waiting for resources to become ready..."
                     sh 'sleep 30'
                     echo "--- Services ---"
-                    sh 'kubectl get svc'
+                    sh 'kubectl get svc --all-namespaces'
                     echo "--- PersistentVolumeClaims ---"
-                    sh 'kubectl get pvc'
+                    sh 'kubectl get pvc --all-namespaces'
+                }
+            }
+        }
+        
+        stage('Terraform Destroy') {
+            // This stage ONLY runs when the action is 'destroy'.
+            when {
+                expression { params.ACTION == 'destroy' }
+            }
+            steps {
+                withCredentials([aws(credentialsId: 'aws-credentials-for-eks')]) {
+                    // CRITICAL Safety Gate: Double confirmation for destruction
+                    input 'DANGER: Proceed with Terraform Destroy? This cannot be undone.'
+
+                    echo "Destroying infrastructure..."
+                    // We apply the 'destroy' plan that was generated in the 'plan' stage
+                    sh 'terraform apply -auto-approve tfplan'
                 }
             }
         }
@@ -81,6 +135,7 @@ pipeline {
     post {
         always {
             echo 'Pipeline finished.'
+            // This cleans the workspace of plan files and checked-out code for a clean run next time.
             cleanWs()
         }
     }
