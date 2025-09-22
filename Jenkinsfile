@@ -97,7 +97,8 @@ pipeline {
                 script {
                     dir('app-repo') {
                         echo "Cloning application repository from ${params.APP_GIT_REPO_URL}"
-                        git url: params.APP_GIT_REPO_URL
+                        //git url: params.APP_GIT_REPO_URL
+                        git url: params.APP_GIT_REPO_URL, credentialsId: 'git-https-token'
 
                         echo "Applying Kubernetes manifests from the repository..."
                         // Assuming manifests are in a 'manifests' folder. Adjust if needed.
