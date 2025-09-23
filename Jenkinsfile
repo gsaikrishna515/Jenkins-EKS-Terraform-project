@@ -108,6 +108,8 @@ pipeline {
                             echo "Applying Kubernetes manifests from the repository..."
                             // I see your log uses 'kubernetes/' not 'manifests/', so I've updated the path.
                             sh "kubectl apply -f kubernetes/"
+                            sh 'sleep 20'
+                            sh 'kubectl rollout restart deployment product-service'
                         }
                         
                         echo "Deployment initiated. Waiting for resources to become ready..."
