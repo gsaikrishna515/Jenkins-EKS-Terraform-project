@@ -101,7 +101,7 @@ pipeline {
                             sh 'kubectl rollout restart deployment product-service'
                         }
                         echo "Deployment initiated. Waiting for resources to become ready..."
-                        sh 'sleep 30'
+                        sh 'sleep 60'
                         echo "--- Services ---"
                         sh 'kubectl get svc --all-namespaces'
                         echo "--- PersistentVolumeClaims ---"
