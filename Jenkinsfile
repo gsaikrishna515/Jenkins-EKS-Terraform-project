@@ -24,6 +24,8 @@ pipeline {
     }
 
     stages {
+        // ... (Checkout, Plan, Apply, Configure Kubectl, Deploy Application stages are all correct and remain unchanged) ...
+
         stage('Checkout Infrastructure Code') {
             steps {
                 echo 'Checking out the EKS Terraform project...'
@@ -32,9 +34,7 @@ pipeline {
         }
 
         stage('Terraform Plan') {
-            // This stage runs for 'plan', 'apply', and 'destroy' actions.
             when {
-                // Fixed syntax: Added '==' to the expression
                 expression { params.ACTION == 'plan' || params.ACTION == 'apply' || params.ACTION == 'destroy' }
             }
             steps {
@@ -42,7 +42,6 @@ pipeline {
                     script {
                         echo "Initializing Terraform..."
                         sh 'terraform init -input=false'
-                        // Generate a different plan file based on the action
                         if (params.ACTION == 'destroy') {
                             echo "Generating destroy plan..."
                             sh 'terraform plan -destroy -out=tfplan'
@@ -56,13 +55,11 @@ pipeline {
         }
 
         stage('Terraform Apply') {
-            // This stage ONLY runs when the action is 'apply'.
             when {
                 expression { params.ACTION == 'apply' }
             }
             steps {
                 withCredentials([aws(credentialsId: 'aws-credentials-for-eks')]) {
-                    // Safety Gate: Manual approval before applying
                     input 'Proceed with Terraform Apply?'
                     echo "Applying Terraform plan..."
                     sh 'terraform apply -auto-approve tfplan'
@@ -95,11 +92,9 @@ pipeline {
                     script {
                         dir('app-repo') {
                             echo "Cloning application repository from ${params.APP_GIT_REPO_URL}"
-                            // NOTE: Make sure 'git-https-token' is the correct Credentials ID in Jenkins for your GitHub PAT.
                             git url: params.APP_GIT_REPO_URL,
                                 branch: 'main',
                                 credentialsId: 'git-https-token'
-                            
                             echo "Applying Kubernetes manifests from the repository..."
                             sh "kubectl apply -f kubernetes/"
                             sh 'sleep 20'
@@ -117,10 +112,9 @@ pipeline {
                 }
             }
         }
-
-        // --- UPDATED DESTROY STAGE ---
+        
+        // --- CORRECTED DESTROY STAGE ---
         stage('Terraform Destroy') {
-            // This stage ONLY runs when the action is 'destroy'.
             when {
                 expression { params.ACTION == 'destroy' }
             }
@@ -129,42 +123,41 @@ pipeline {
                     script {
                         echo "--- STEP 1: Cleaning up Kubernetes application resources ---"
                         
-                        echo "Configuring kubectl for cleanup..."
-                        sh '''
-                            # Get the cluster name from the existing Terraform state
-                            CLUSTER_NAME=$(terraform output -raw cluster_name)
+                        // Get the cluster name from Terraform state into a Groovy variable
+                        def clusterName = sh(script: 'terraform output -raw cluster_name', returnStdout: true).trim()
+                        
+                        // Use a Groovy 'if' condition to check if the cluster exists
+                        if (!clusterName.isEmpty()) {
+                            echo "Cluster '${clusterName}' found. Proceeding with Kubernetes resource cleanup."
                             
-                            # Check if the cluster name exists. If not, maybe it was never created.
-                            if [ -z "$CLUSTER_NAME" ]; then
-                                echo "Could not determine cluster name from Terraform state. Assuming no Kubernetes resources to clean."
-                            else
-                                aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}
+                            // Step 1.1: Configure kubectl using a shell step
+                            sh "aws eks update-kubeconfig --region ${AWS_REGION} --name ${clusterName}"
+                            
+                            // Step 1.2: Use the 'dir' step to create a temporary directory
+                            dir('app-repo-cleanup') {
+                                echo "Cloning application repository to delete manifests..."
+                                // Use the 'git' step inside 'dir'
+                                git url: params.APP_GIT_REPO_URL, 
+                                    branch: 'main', 
+                                    credentialsId: 'git-https-token'
                                 
-                                # Clone the application repo to get the manifests for deletion
-                                dir('app-repo-cleanup') {
-                                    echo "Cloning application repository to delete manifests..."
-                                    git url: params.APP_GIT_REPO_URL, 
-                                        branch: 'main', 
-                                        credentialsId: 'git-https-token'
-                                    
-                                    echo "Deleting Kubernetes application (Services, Deployments, etc.)..."
-                                    # The '--ignore-not-found=true' flag prevents errors if the app was never fully deployed.
-                                    sh "kubectl delete -f kubernetes/ --ignore-not-found=true"
-                                }
-                                
-                                echo "Waiting 60 seconds for AWS Load Balancer and ENIs to be deleted..."
-                                # This pause is CRITICAL to give the AWS controller time to clean up network resources.
-                                sleep 60
-                            fi
-                        '''
+                                echo "Deleting Kubernetes application (Services, Deployments, etc.)..."
+                                // Use a shell step to run kubectl
+                                sh "kubectl delete -f kubernetes/ --ignore-not-found=true"
+                            }
+                            
+                            echo "Waiting 60 seconds for AWS Load Balancer and ENIs to be deleted..."
+                            // Use the Groovy 'sleep' step
+                            sleep 60
+                        } else {
+                            echo "Could not determine cluster name from Terraform state. Assuming no Kubernetes resources to clean."
+                        }
                         
                         echo "--- STEP 2: Destroying Terraform infrastructure ---"
 
-                        // CRITICAL Safety Gate: Double confirmation for destruction
                         input 'DANGER: Proceed with Terraform Destroy? This cannot be undone.'
                         
                         echo "Destroying infrastructure..."
-                        // We apply the 'destroy' plan that was generated in the 'Terraform Plan' stage
                         sh 'terraform apply -auto-approve tfplan'
                     }
                 }
@@ -175,7 +168,6 @@ pipeline {
     post {
         always {
             echo 'Pipeline finished.'
-            // This cleans the workspace of plan files and checked-out code for a clean run next time.
             cleanWs()
         }
     }
