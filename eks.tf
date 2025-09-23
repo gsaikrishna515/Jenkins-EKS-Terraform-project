@@ -69,7 +69,7 @@ resource "aws_eks_node_group" "node_group" {
     aws_subnet.private_b.id
   ]
 
-  instance_types = ["t3.large"]
+  instance_types = ["t3.medium"]
   scaling_config {
     desired_size = 2
     max_size     = 3
