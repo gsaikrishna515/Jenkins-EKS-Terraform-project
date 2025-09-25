@@ -98,7 +98,7 @@ pipeline {
                             echo "Applying Kubernetes manifests from the repository..."
                             sh "kubectl apply -f kubernetes/"
                             sh 'sleep 20'
-                            sh 'kubectl rollout restart deployment product-service'
+                           // sh 'kubectl rollout restart deployment product-service'
                         }
                         echo "Deployment initiated. Waiting for resources to become ready..."
                         sh 'sleep 60'
