@@ -140,3 +140,39 @@ resource "aws_eks_addon" "ebs_csi_driver" {
     aws_iam_openid_connect_provider.eks
   ]
 }
+
+
+# --------------------------------------------------------------------------
+#  Kubernetes Provider Configuration & Resources ---
+# --------------------------------------------------------------------------
+
+# Data sources to get authentication details from the created EKS cluster
+data "aws_eks_cluster" "cluster" {
+  name = aws_eks_cluster.eks_cluster.name
+}
+
+data "aws_eks_cluster_auth" "cluster" {
+  name = aws_eks_cluster.eks_cluster.name
+}
+
+# Kubernetes Provider configuration
+provider "kubernetes" {
+  host                   = data.aws_eks_cluster.cluster.endpoint
+  cluster_ca_certificate = base64decode(data.aws_eks_cluster.cluster.certificate_authority.0.data)
+  token                  = data.aws_eks_cluster_auth.cluster.token
+}
+
+# Resource to create the 'webapps' namespace in the EKS cluster
+resource "kubernetes_namespace" "webapps" {
+  metadata {
+    name = "webapps"
+    labels = {
+      "name" = "webapps"
+    }
+  }
+}
+
+
+
+
+
